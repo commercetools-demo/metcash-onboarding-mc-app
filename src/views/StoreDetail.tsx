@@ -15,6 +15,7 @@ import { fetchProductsByPillar, fetchCategories, fetchSelectionProductIds } from
 import { BANNERS, TIER_LABELS, LIFECYCLE_TONE, bannerMeta } from '../lib/banners';
 import BannerChip from '../components/BannerChip';
 import FeatureUnlocks from '../components/FeatureUnlocks';
+import StoreRangeEditor from '../components/StoreRangeEditor';
 import type {
   StoreData,
   ProgrammeTierObject,
@@ -87,6 +88,7 @@ export default function StoreDetail() {
   const [draftTier, setDraftTier] = useState<ProgrammeTierKey | ''>('');
   const [pendingAction, setPendingAction] = useState<LifecycleAction | null>(null);
   const [localLines, setLocalLines] = useState<CatalogProduct[]>([]);
+  const [showRange, setShowRange] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -210,8 +212,8 @@ export default function StoreDetail() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <SecondaryButton label="← Network" onClick={() => history.push(`${base}/network`)} />
             <PrimaryButton
-              label="Manage range"
-              onClick={() => history.push(`${base}/network/store/${store.key}/range`)}
+              label={showRange ? 'Hide assortment' : 'Manage assortment'}
+              onClick={() => setShowRange((v) => !v)}
             />
           </div>
           <Spacings.Inline alignItems="center" scale="s">
@@ -229,6 +231,22 @@ export default function StoreDetail() {
         {flash && (
           <Card theme="dark" insetScale="s">
             <Text.Body>{flash}</Text.Body>
+          </Card>
+        )}
+
+        {/* product assortment (embedded range editor) */}
+        {showRange && (
+          <Card>
+            <Spacings.Stack scale="m">
+              <div>
+                <Text.Subheadline as="h4">Product assortment</Text.Subheadline>
+                <Text.Detail tone="secondary">
+                  Drag or click to add/remove products from this store’s range. Saves live to the
+                  storefront.
+                </Text.Detail>
+              </div>
+              <StoreRangeEditor storeKey={store.key} banner={f.banner} onSaved={load} />
+            </Spacings.Stack>
           </Card>
         )}
 
