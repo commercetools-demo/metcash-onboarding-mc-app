@@ -1,0 +1,58 @@
+{
+  "name": "metcash-onboarding-mc-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Metcash Retailer Onboarding — Merchant Center Custom Application (RFP Section 6)",
+  "scripts": {
+    "start": "mc-scripts start",
+    "build": "mc-scripts build",
+    "compile-html": "mc-scripts compile-html",
+    "typecheck": "tsc --noEmit",
+    "seed:owners": "node scripts/seed-owners.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@apollo/client": "^3.14.1",
+    "graphql": "^16.13.2",
+    "@commercetools-frontend/application-components": "27.4.2",
+    "@commercetools-frontend/application-config": "27.4.2",
+    "@commercetools-frontend/application-shell": "27.4.2",
+    "@commercetools-frontend/application-shell-connectors": "27.4.2",
+    "@commercetools-frontend/assets": "27.4.2",
+    "@commercetools-frontend/constants": "27.4.2",
+    "@commercetools-frontend/permissions": "27.4.2",
+    "@commercetools-frontend/sdk": "27.4.2",
+    "@commercetools-uikit/card": "^20",
+    "@commercetools-uikit/checkbox-input": "^20",
+    "@commercetools-uikit/constraints": "^20",
+    "@commercetools-uikit/data-table": "^20",
+    "@commercetools-uikit/date-input": "^20",
+    "@commercetools-uikit/field-label": "^20",
+    "@commercetools-uikit/flat-button": "^20",
+    "@commercetools-uikit/grid": "^20",
+    "@commercetools-uikit/icons": "^20",
+    "@commercetools-uikit/loading-spinner": "^20",
+    "@commercetools-uikit/multiline-text-input": "^20",
+    "@commercetools-uikit/number-input": "^20",
+    "@commercetools-uikit/primary-button": "^20",
+    "@commercetools-uikit/secondary-button": "^20",
+    "@commercetools-uikit/select-input": "^20",
+    "@commercetools-uikit/spacings": "^20",
+    "@commercetools-uikit/stamp": "^20",
+    "@commercetools-uikit/tag": "^20",
+    "@commercetools-uikit/text": "^20",
+    "@commercetools-uikit/text-input": "^20",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "react-router-dom": "^5"
+  },
+  "devDependencies": {
+    "@commercetools-frontend/mc-scripts": "27.4.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/react-router-dom": "^5",
+    "typescript": "^5"
+  }
+}

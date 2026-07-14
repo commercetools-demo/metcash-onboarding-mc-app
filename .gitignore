@@ -1,0 +1,6 @@
+.env
+.env.local
+.mcp.json
+node_modules
+dist
+build
