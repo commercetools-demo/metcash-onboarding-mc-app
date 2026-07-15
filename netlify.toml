@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = "public"
+
+# SPA routing — MC deep links (/:projectKey/retailer-onboarding/...) must serve index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

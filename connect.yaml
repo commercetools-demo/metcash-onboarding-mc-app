@@ -1,0 +1,15 @@
+deployAs:
+  - name: retailer-onboarding
+    applicationType: merchant-center-custom-application
+    configuration:
+      standardConfiguration:
+        - key: CUSTOM_APPLICATION_ID
+          description: The Custom Application ID from Merchant Center Settings
+          required: true
+        - key: CLOUD_IDENTIFIER
+          description: "Cloud region identifier (e.g. gcp-au, gcp-eu, gcp-us)"
+          default: gcp-au
+        - key: ENTRY_POINT_URI_PATH
+          description: The entry point URI path registered in Merchant Center
+          default: retailer-onboarding
+          required: true
