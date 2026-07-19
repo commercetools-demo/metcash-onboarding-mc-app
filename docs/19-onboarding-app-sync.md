@@ -49,7 +49,7 @@ onboarding app's banner→logo/label mapping still points at Bottle-O for liquor
 
 **Recommended fix (branding only — no data change):**
 1. In the onboarding app's banner config/asset map, **add `CELLARBRATIONS`** as the liquor banner with the
-   Cellarbrations logo. Asset provided: `public/cellarbrations-logo.png` (copied into this repo; source
+   Cellarbrations logo. Asset provided: `docs/assets/cellarbrations-logo.png` (copied into this repo; source
    `metcash-demo/site/public/banners/cellarbrations/logo.png`). Brand = **black + gold/amber (#F5A800) + white**.
 2. Keep the 3 legacy `BOTTLE_O` stores as **legacy** (they back the owner demo). Either relabel them as
    Cellarbrations in the UI, **or** — nicer Section-6 narrative — use them to demo **off-boarding Bottle-O +
