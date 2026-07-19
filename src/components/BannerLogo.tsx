@@ -33,13 +33,21 @@ export default function BannerLogo({ banner, height = 22, variant = 'wordmark' }
   const bg = meta?.color ?? '#8f9db0';
   const fg = meta?.onColor ?? '#ffffff';
 
-  // Official logo, if supplied.
+  // Official logo, if supplied. Image logos carry internal padding, so render them
+  // noticeably taller than the coloured wordmark tags to stay legible at the same row height.
   if (key && LOGO_SRC[key]) {
+    const imgHeight = Math.round(height * 1.9);
     return (
       <img
         src={LOGO_SRC[key]}
         alt={label}
-        style={{ height, display: 'block', objectFit: 'contain' }}
+        style={{
+          height: imgHeight,
+          maxWidth: imgHeight * 5,
+          display: 'block',
+          objectFit: 'contain',
+          verticalAlign: 'middle',
+        }}
       />
     );
   }
