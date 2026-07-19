@@ -7,11 +7,13 @@ import Stamp from '@commercetools-uikit/stamp';
 import PrimaryButton from '@commercetools-uikit/primary-button';
 import SecondaryButton from '@commercetools-uikit/secondary-button';
 import SelectInput from '@commercetools-uikit/select-input';
+import CheckboxInput from '@commercetools-uikit/checkbox-input';
+import TextInput from '@commercetools-uikit/text-input';
 import LoadingSpinner from '@commercetools-uikit/loading-spinner';
 import { ConfirmationDialog, useModalState } from '@commercetools-frontend/application-components';
 import { useCtClient, fetchTiers } from '../lib/ctClient';
-import { updateTier, setLifecycle, selectionKey } from '../lib/ctWrites';
-import { fetchProductsByPillar, fetchCategories, fetchSelectionProductIds } from '../lib/catalog';
+import { updateTier, setLifecycle, selectionKey, setStoreFields } from '../lib/ctWrites';
+import { fetchCategories, fetchSelectionProductIds, fetchProductsByCategoryId } from '../lib/catalog';
 import { BANNERS, TIER_LABELS, LIFECYCLE_TONE, bannerMeta } from '../lib/banners';
 import BannerChip from '../components/BannerChip';
 import FeatureUnlocks from '../components/FeatureUnlocks';
@@ -89,6 +91,8 @@ export default function StoreDetail() {
   const [pendingAction, setPendingAction] = useState<LifecycleAction | null>(null);
   const [localLines, setLocalLines] = useState<CatalogProduct[]>([]);
   const [showRange, setShowRange] = useState(false);
+  const [ff, setFf] = useState({ rapid: false, radius: '', click: false, timeslot: '' });
+  const [ffBaseline, setFfBaseline] = useState({ rapid: false, radius: '', click: false, timeslot: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,6 +101,15 @@ export default function StoreDetail() {
       const s = await client.get<StoreData>(`/stores/key=${storeKey}`);
       setStore(s);
       setDraftTier((s.custom?.fields.programme_tier as ProgrammeTierKey) ?? '');
+      const sf = s.custom?.fields ?? {};
+      const ffInit = {
+        rapid: !!sf.rapid_delivery_enabled,
+        radius: sf.rapid_delivery_radius_km != null ? String(sf.rapid_delivery_radius_km) : '',
+        click: !!sf.click_collect_enabled,
+        timeslot: sf.timeslot_capacity != null ? String(sf.timeslot_capacity) : '',
+      };
+      setFf(ffInit);
+      setFfBaseline(ffInit);
       const tierList = await fetchTiers(client);
       const map = {} as Record<ProgrammeTierKey, ProgrammeTierObject>;
       tierList.forEach((t) => (map[t.key] = t));
@@ -112,20 +125,19 @@ export default function StoreDetail() {
           setOwner(null);
         }
       }
-      // local/exclusive lines: products in this store's selection tagged `local`
+      // local/exclusive lines: products tagged `local` that are in this store's selection
       try {
-        const pillar = bannerMeta(s.custom?.fields.banner)?.pillar as Pillar | undefined;
-        const [cats, prods, selIds] = await Promise.all([
-          fetchCategories(client),
-          pillar ? fetchProductsByPillar(client, pillar) : Promise.resolve([]),
-          fetchSelectionProductIds(client, selectionKey(storeKey)),
-        ]);
+        const cats = await fetchCategories(client);
         const localCatId = cats.find((c) => c.key === 'local')?.id;
-        setLocalLines(
-          localCatId
-            ? prods.filter((p) => selIds.has(p.id) && p.categoryIds.includes(localCatId))
-            : []
-        );
+        if (localCatId) {
+          const [localProds, selIds] = await Promise.all([
+            fetchProductsByCategoryId(client, localCatId),
+            fetchSelectionProductIds(client, selectionKey(storeKey)),
+          ]);
+          setLocalLines(localProds.filter((p) => selIds.has(p.id)));
+        } else {
+          setLocalLines([]);
+        }
       } catch {
         setLocalLines([]);
       }
@@ -172,6 +184,32 @@ export default function StoreDetail() {
     try {
       await updateTier(client, store.key, draftTier as ProgrammeTierKey);
       setFlash(`Tier changed to ${TIER_LABELS[draftTier as ProgrammeTierKey]} — capabilities updated with no rebuild.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const ffDirty =
+    ff.rapid !== ffBaseline.rapid ||
+    ff.radius !== ffBaseline.radius ||
+    ff.click !== ffBaseline.click ||
+    ff.timeslot !== ffBaseline.timeslot;
+
+  const handleSaveFulfilment = async () => {
+    setSaving(true);
+    setFlash(null);
+    try {
+      await setStoreFields(client, store!.key, {
+        rapid_delivery_enabled: ff.rapid,
+        rapid_delivery_radius_km: ff.rapid && ff.radius ? Number(ff.radius) : undefined,
+        click_collect_enabled: ff.click,
+        timeslot_capacity: ff.click && ff.timeslot ? Number(ff.timeslot) : undefined,
+      });
+      setFfBaseline({ ...ff });
+      setFlash('Fulfilment settings saved.');
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -249,6 +287,48 @@ export default function StoreDetail() {
             </Spacings.Stack>
           </Card>
         )}
+
+        {/* fulfilment */}
+        <Card>
+          <Spacings.Stack scale="m">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text.Subheadline as="h4">Fulfilment</Text.Subheadline>
+              <PrimaryButton
+                label={ffDirty ? 'Save fulfilment' : 'Saved'}
+                onClick={handleSaveFulfilment}
+                isDisabled={!ffDirty || saving}
+              />
+            </div>
+            <Spacings.Inline scale="l" alignItems="center">
+              <CheckboxInput isChecked={ff.rapid} onChange={() => setFf({ ...ff, rapid: !ff.rapid })}>
+                Rapid delivery
+              </CheckboxInput>
+              {ff.rapid && (
+                <div style={{ width: 200 }}>
+                  <Text.Detail isBold>Radius (km)</Text.Detail>
+                  <TextInput
+                    value={ff.radius}
+                    onChange={(e) => setFf({ ...ff, radius: e.target.value.replace(/[^0-9.]/g, '') })}
+                  />
+                </div>
+              )}
+            </Spacings.Inline>
+            <Spacings.Inline scale="l" alignItems="center">
+              <CheckboxInput isChecked={ff.click} onChange={() => setFf({ ...ff, click: !ff.click })}>
+                Click &amp; Collect
+              </CheckboxInput>
+              {ff.click && (
+                <div style={{ width: 200 }}>
+                  <Text.Detail isBold>Timeslot capacity</Text.Detail>
+                  <TextInput
+                    value={ff.timeslot}
+                    onChange={(e) => setFf({ ...ff, timeslot: e.target.value.replace(/[^0-9]/g, '') })}
+                  />
+                </div>
+              )}
+            </Spacings.Inline>
+          </Spacings.Stack>
+        </Card>
 
         {/* tier management (O7) */}
         <Card>
@@ -356,7 +436,22 @@ export default function StoreDetail() {
               <InfoRow label="Location" value={`${f.suburb ?? ''}${f.state ? ', ' + f.state : ''} ${f.postcode ?? ''}`} />
               <InfoRow label="Address" value={f.street_address} />
               <InfoRow label="Phone" value={f.phone} />
-              <InfoRow label="Rapid delivery" value={f.rapid_delivery_enabled ? 'Enabled' : 'Disabled'} />
+              <InfoRow
+                label="Rapid delivery"
+                value={
+                  f.rapid_delivery_enabled
+                    ? `Enabled${f.rapid_delivery_radius_km != null ? ` · ${f.rapid_delivery_radius_km} km` : ''}`
+                    : 'Disabled'
+                }
+              />
+              <InfoRow
+                label="Click & Collect"
+                value={
+                  f.click_collect_enabled
+                    ? `Enabled${f.timeslot_capacity != null ? ` · ${f.timeslot_capacity}/slot` : ''}`
+                    : 'Disabled'
+                }
+              />
               <InfoRow label="Opt-in date" value={f.opt_in_date} />
               <InfoRow label="Activation date" value={f.activation_date} />
               <InfoRow label="Product feed" value={<code>{f.product_feed_ref}</code>} />

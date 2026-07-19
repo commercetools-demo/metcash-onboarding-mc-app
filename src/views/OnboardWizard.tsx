@@ -33,7 +33,12 @@ import {
   AU_STATES,
 } from '../lib/conventions';
 import { BANNERS, PILLAR_LABELS, TIER_LABELS, bannersForPillar } from '../lib/banners';
-import { fetchProductsByPillar, fetchCategories } from '../lib/catalog';
+import {
+  fetchCategories,
+  fetchProductTypeIdForPillar,
+  countProducts,
+  fetchAllProductIds,
+} from '../lib/catalog';
 import BannerChip from '../components/BannerChip';
 import FeatureUnlocks from '../components/FeatureUnlocks';
 import ProvisionProgress from '../components/ProvisionProgress';
@@ -112,13 +117,18 @@ export default function OnboardWizard() {
   const [tierKey, setTierKey] = useState<ProgrammeTierKey | ''>('');
 
   // catalogue / range
-  const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
   const [categories, setCategories] = useState<CategoryLite[]>([]);
-  const [loadingCatalog, setLoadingCatalog] = useState(false);
+  const [productTypeId, setProductTypeId] = useState<string | null>(null);
+  const [pillarTotal, setPillarTotal] = useState<number>(0);
   const [inRange, setInRange] = useState<Set<string>>(new Set());
+  const [rangeInitialized, setRangeInitialized] = useState(false);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
 
   // fulfilment & feeds
   const [rapidDelivery, setRapidDelivery] = useState(false);
+  const [rapidRadius, setRapidRadius] = useState('');
+  const [clickCollect, setClickCollect] = useState(false);
+  const [timeslotCap, setTimeslotCap] = useState('');
   const [feedOverride, setFeedOverride] = useState({ product: '', pricing: '', inventory: '' });
   const [idOverride, setIdOverride] = useState({ coveo: '', braze: '' });
 
@@ -133,30 +143,37 @@ export default function OnboardWizard() {
     fetchCategories(client).then(setCategories).catch(() => setCategories([]));
   }, [client]);
 
+  // resolve the pillar's product type + total when the pillar changes; reset the range
   useEffect(() => {
-    if (!pillar) {
-      setCatalogProducts([]);
-      setInRange(new Set());
-      return;
-    }
+    setInRange(new Set());
+    setRangeInitialized(false);
+    setProductTypeId(null);
+    setPillarTotal(0);
+    if (!pillar) return;
+    let cancelled = false;
+    (async () => {
+      const ptId = await fetchProductTypeIdForPillar(client, pillar as Pillar).catch(() => null);
+      if (cancelled) return;
+      setProductTypeId(ptId);
+      if (ptId) {
+        const t = await countProducts(client, { productTypeId: ptId }).catch(() => 0);
+        if (!cancelled) setPillarTotal(t);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [client, pillar]);
+
+  // default a new store to the FULL national range the first time the catalogue step is shown
+  useEffect(() => {
+    if (step !== 4 || !productTypeId || rangeInitialized) return;
     let cancelled = false;
     setLoadingCatalog(true);
-    fetchProductsByPillar(client, pillar as Pillar)
-      .then((ps) => {
-        if (cancelled) return;
-        setCatalogProducts(ps);
-        setInRange(new Set(ps.map((p) => p.id))); // default: carry all pillar products
-      })
-      .catch(() => {
-        if (!cancelled) setCatalogProducts([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingCatalog(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [client, pillar]);
+    fetchAllProductIds(client, { productTypeId })
+      .then((ids) => { if (!cancelled) { setInRange(new Set(ids)); setRangeInitialized(true); } })
+      .catch(() => { if (!cancelled) setRangeInitialized(true); })
+      .finally(() => { if (!cancelled) setLoadingCatalog(false); });
+    return () => { cancelled = true; };
+  }, [client, step, productTypeId, rangeInitialized]);
 
   const computedKey = banner ? makeStoreKey(banner, retailerName) : '';
   const storeKey = (keyOverride.trim() || computedKey).trim();
@@ -229,6 +246,9 @@ export default function OnboardWizard() {
         opt_in_date: optInDate,
         lifecycle_state: 'DRAFT',
         rapid_delivery_enabled: rapidDelivery,
+        rapid_delivery_radius_km: rapidDelivery && rapidRadius ? Number(rapidRadius) : undefined,
+        click_collect_enabled: clickCollect,
+        timeslot_capacity: timeslotCap ? Number(timeslotCap) : undefined,
         coveo_source_id: ids.coveo,
         braze_segment_id: ids.braze,
         product_feed_ref: feeds.product,
@@ -267,7 +287,13 @@ export default function OnboardWizard() {
     setLoc({ street_address: '', suburb: '', state: '', postcode: '', phone: '' });
     setTierKey('');
     setInRange(new Set());
+    setRangeInitialized(false);
+    setProductTypeId(null);
+    setPillarTotal(0);
     setRapidDelivery(false);
+    setRapidRadius('');
+    setClickCollect(false);
+    setTimeslotCap('');
     setFeedOverride({ product: '', pricing: '', inventory: '' });
     setIdOverride({ coveo: '', braze: '' });
     setProvSteps([]);
@@ -624,20 +650,22 @@ export default function OnboardWizard() {
               <Spacings.Stack scale="m">
                 <Text.Subheadline as="h4">Catalogue (range)</Text.Subheadline>
                 <Text.Body tone="secondary">
-                  Default range is every{' '}
-                  {pillar ? PILLAR_LABELS[pillar as Pillar] : ''} product ({inRange.size} of{' '}
-                  {catalogProducts.length}). Drag or click cards to remove what this store won’t
-                  carry, or filter by category to bulk-edit. Feeds keep this in sync in production.
+                  New {pillar ? PILLAR_LABELS[pillar as Pillar] : ''} stores start carrying the full
+                  national range. Search or filter by category to remove what this store won’t carry,
+                  or curate a smaller range. Feeds keep this in sync in production.
                 </Text.Body>
                 {loadingCatalog ? (
-                  <LoadingSpinner scale="s">Loading products…</LoadingSpinner>
+                  <LoadingSpinner scale="s">Preparing the national range…</LoadingSpinner>
                 ) : (
                   <CatalogEditor
-                    products={catalogProducts}
-                    categories={categories}
+                    productTypeId={productTypeId}
+                    categories={categories.filter(
+                      (c) => c.key && (c.key.startsWith(pillar || '') || c.key === 'local')
+                    )}
                     inRange={inRange}
                     onChange={setInRange}
                     localCategoryId={categories.find((c) => c.key === 'local')?.id}
+                    totalHint={pillarTotal}
                   />
                 )}
               </Spacings.Stack>
@@ -647,16 +675,48 @@ export default function OnboardWizard() {
             {step === 5 && (
               <Spacings.Stack scale="m">
                 <Text.Subheadline as="h4">Fulfilment & feed wiring</Text.Subheadline>
-                <CheckboxInput
-                  isChecked={rapidDelivery}
-                  onChange={() => setRapidDelivery(!rapidDelivery)}
-                >
-                  Rapid delivery enabled
-                </CheckboxInput>
-                {selectedTier && (
+                <Spacings.Inline scale="l" alignItems="center">
+                  <CheckboxInput
+                    isChecked={rapidDelivery}
+                    onChange={() => setRapidDelivery(!rapidDelivery)}
+                  >
+                    Rapid delivery enabled
+                  </CheckboxInput>
+                  {rapidDelivery && (
+                    <div style={{ width: 200 }}>
+                      <Field label="Rapid delivery radius (km)">
+                        <TextInput
+                          value={rapidRadius}
+                          onChange={(e) => setRapidRadius(e.target.value.replace(/[^0-9.]/g, ''))}
+                          placeholder="e.g. 8"
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </Spacings.Inline>
+                <Spacings.Inline scale="l" alignItems="center">
+                  <CheckboxInput
+                    isChecked={clickCollect}
+                    onChange={() => setClickCollect(!clickCollect)}
+                  >
+                    Click &amp; Collect enabled
+                  </CheckboxInput>
+                  {clickCollect && (
+                    <div style={{ width: 200 }}>
+                      <Field label="Timeslot capacity (per slot)">
+                        <TextInput
+                          value={timeslotCap}
+                          onChange={(e) => setTimeslotCap(e.target.value.replace(/[^0-9]/g, ''))}
+                          placeholder="e.g. 12"
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </Spacings.Inline>
+                {selectedTier && !selectedTier.value.features.clickCollect && clickCollect && (
                   <Text.Detail tone="secondary">
-                    Click &amp; Collect is {selectedTier.value.features.clickCollect ? 'ON' : 'OFF'} for this
-                    tier (governed by the template, not per-store).
+                    Note: {selectedTier.value.label} has Click &amp; Collect OFF at the tier level —
+                    this per-store flag only takes effect where the tier allows it.
                   </Text.Detail>
                 )}
                 <Text.Detail isBold>Feed references (wired, not authored)</Text.Detail>
@@ -723,10 +783,17 @@ export default function OnboardWizard() {
                   <ReviewRow label="Tier" value={selectedTier?.value.label ?? tierKey} />
                   <ReviewRow
                     label="Range"
-                    value={`${inRange.size} of ${catalogProducts.length} products`}
+                    value={`${inRange.size} of ${pillarTotal} products`}
                   />
                   <ReviewRow label="Location" value={`${loc.suburb}, ${loc.state} ${loc.postcode}`} />
-                  <ReviewRow label="Rapid delivery" value={rapidDelivery ? 'Yes' : 'No'} />
+                  <ReviewRow
+                    label="Rapid delivery"
+                    value={rapidDelivery ? `Yes${rapidRadius ? ` · ${rapidRadius} km` : ''}` : 'No'}
+                  />
+                  <ReviewRow
+                    label="Click & Collect"
+                    value={clickCollect ? `Yes${timeslotCap ? ` · ${timeslotCap}/slot` : ''}` : 'No'}
+                  />
                   <ReviewRow label="Opt-in date" value={optInDate} />
                   <ReviewRow label="Product feed" value={<code>{feeds.product}</code>} />
                   <ReviewRow label="Channels" value={<code>{storeKey}-price / -supply</code>} />

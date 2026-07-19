@@ -2,11 +2,14 @@ import type { CtClient } from './ctClient';
 import type { CtPagedQueryResponse, CatalogProduct, CategoryLite, Pillar } from './types';
 
 /**
- * Catalogue / ranging data access.
+ * Catalogue / ranging data access — SCALE-AWARE (project now holds ~4k products).
  *
  * Ranging = choosing which EXISTING products a store carries, via its Product Selection
- * (Individual mode). This is provisioning the store's scope — we still never author products
- * or prices. In production the pillar feeds keep the selection in sync; here HQ curates it.
+ * (Individual mode). This is provisioning the store's scope — we never author products/prices.
+ *
+ * Uses the Product Projection Search API (indexing is Activated on the project) for paginated,
+ * server-side search + category/product-type filtering, so we never load thousands of products
+ * into the browser at once.
  */
 
 // Metcash pillar → product-type key.
@@ -27,18 +30,7 @@ export async function fetchProductTypeIdForPillar(
 ): Promise<string | null> {
   const wantKey = PILLAR_PRODUCT_TYPE_KEY[pillar];
   const data = await client.get<CtPagedQueryResponse<ProductTypeLite>>('/product-types?limit=100');
-  const match = data.results.find((pt) => pt.key === wantKey);
-  return match?.id ?? null;
-}
-
-interface CategoryRef { id: string }
-interface Money { url: string }
-interface ProductProjection {
-  id: string;
-  key?: string;
-  name?: Record<string, string>;
-  categories?: CategoryRef[];
-  masterVariant?: { sku?: string; images?: { url: string }[] };
+  return data.results.find((pt) => pt.key === wantKey)?.id ?? null;
 }
 
 function loc(m?: Record<string, string>): string {
@@ -46,28 +38,26 @@ function loc(m?: Record<string, string>): string {
   return m['en-AU'] ?? m['en'] ?? Object.values(m)[0] ?? '';
 }
 
-/** All products belonging to a pillar's product type (the default candidate range). */
-export async function fetchProductsByPillar(
-  client: CtClient,
-  pillar: Pillar
-): Promise<CatalogProduct[]> {
-  const productTypeId = await fetchProductTypeIdForPillar(client, pillar);
-  if (!productTypeId) return []; // e.g. food/grocery not seeded yet
-  const where = encodeURIComponent(`productType(id="${productTypeId}")`);
-  const data = await client.get<CtPagedQueryResponse<ProductProjection>>(
-    `/product-projections?where=${where}&limit=500&staged=false`
-  );
-  return data.results.map((p) => ({
+interface ProductProjection {
+  id: string;
+  key?: string;
+  name?: Record<string, string>;
+  categories?: { id: string }[];
+  masterVariant?: { sku?: string; images?: { url: string }[] };
+}
+
+function toCatalogProduct(p: ProductProjection): CatalogProduct {
+  return {
     id: p.id,
     key: p.key,
     name: loc(p.name),
     sku: p.masterVariant?.sku,
     image: p.masterVariant?.images?.[0]?.url,
     categoryIds: (p.categories ?? []).map((c) => c.id),
-  }));
+  };
 }
 
-/** Categories (for the range editor filter). */
+// ---- categories (for the range editor filter) ----
 export async function fetchCategories(client: CtClient): Promise<CategoryLite[]> {
   const data = await client.get<CtPagedQueryResponse<{
     id: string;
@@ -83,23 +73,118 @@ export async function fetchCategories(client: CtClient): Promise<CategoryLite[]>
   }));
 }
 
+// ---- product projection search (paginated) ----
+interface SearchArgs {
+  productTypeId: string;
+  categoryId?: string;
+  text?: string;
+  limit?: number;
+  offset?: number;
+}
+
+function searchPath({ productTypeId, categoryId, text, limit = 24, offset = 0 }: SearchArgs): string {
+  const params: string[] = [];
+  params.push(`filter=${encodeURIComponent(`productType.id:"${productTypeId}"`)}`);
+  if (categoryId) params.push(`filter=${encodeURIComponent(`categories.id:"${categoryId}"`)}`);
+  if (text && text.trim()) params.push(`text.en-AU=${encodeURIComponent(text.trim())}`);
+  params.push(`limit=${limit}`);
+  params.push(`offset=${offset}`);
+  params.push('markMatchingVariants=false');
+  params.push('staged=false');
+  return `/product-projections/search?${params.join('&')}`;
+}
+
+export async function searchProductsPage(
+  client: CtClient,
+  args: SearchArgs
+): Promise<{ results: CatalogProduct[]; total: number }> {
+  const data = await client.get<CtPagedQueryResponse<ProductProjection>>(searchPath(args));
+  return { results: data.results.map(toCatalogProduct), total: data.total };
+}
+
+/** Total number of products for a pillar (+ optional category), via a 1-row search. */
+export async function countProducts(client: CtClient, args: Omit<SearchArgs, 'limit' | 'offset'>): Promise<number> {
+  const data = await client.get<CtPagedQueryResponse<ProductProjection>>(
+    searchPath({ ...args, limit: 1, offset: 0 })
+  );
+  return data.total;
+}
+
+/** All product ids for a pillar (+ optional category) — for bulk "carry full range / add category". */
+export async function fetchAllProductIds(
+  client: CtClient,
+  args: Omit<SearchArgs, 'limit' | 'offset'>
+): Promise<string[]> {
+  const ids: string[] = [];
+  const PAGE = 500;
+  let offset = 0;
+  // guard against runaway loops
+  for (let i = 0; i < 40; i++) {
+    const data = await client.get<CtPagedQueryResponse<ProductProjection>>(
+      searchPath({ ...args, limit: PAGE, offset })
+    );
+    ids.push(...data.results.map((p) => p.id));
+    offset += PAGE;
+    if (offset >= data.total || data.results.length === 0) break;
+  }
+  return ids;
+}
+
+/** Product details for a set of ids (batched) — to render the in-range list. */
+export async function fetchProductsByIds(
+  client: CtClient,
+  ids: string[]
+): Promise<CatalogProduct[]> {
+  const out: CatalogProduct[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const batch = ids.slice(i, i + 100);
+    const where = encodeURIComponent(`id in (${batch.map((id) => `"${id}"`).join(',')})`);
+    const data = await client.get<CtPagedQueryResponse<ProductProjection>>(
+      `/product-projections?where=${where}&limit=100&staged=false`
+    );
+    out.push(...data.results.map(toCatalogProduct));
+  }
+  return out;
+}
+
+/** All products in a single category (small sets, e.g. the `local` category). */
+export async function fetchProductsByCategoryId(
+  client: CtClient,
+  categoryId: string
+): Promise<CatalogProduct[]> {
+  const where = encodeURIComponent(`categories(id="${categoryId}")`);
+  const data = await client.get<CtPagedQueryResponse<ProductProjection>>(
+    `/product-projections?where=${where}&limit=200&staged=false`
+  );
+  return data.results.map(toCatalogProduct);
+}
+
+// ---- product selection assignments ----
 interface SelectionProductAssignment {
   product: { id: string };
 }
 
-/** Product ids currently assigned to a store's selection (empty if the selection is new/absent). */
+/** ALL product ids assigned to a store's selection (paginated). */
 export async function fetchSelectionProductIds(
   client: CtClient,
   selectionKey: string
 ): Promise<Set<string>> {
+  const ids = new Set<string>();
+  const PAGE = 500;
+  let offset = 0;
   try {
-    const data = await client.get<CtPagedQueryResponse<SelectionProductAssignment>>(
-      `/product-selections/key=${selectionKey}/products?limit=500`
-    );
-    return new Set(data.results.map((a) => a.product.id));
-  } catch (err) {
-    return new Set();
+    for (let i = 0; i < 40; i++) {
+      const data = await client.get<CtPagedQueryResponse<SelectionProductAssignment>>(
+        `/product-selections/key=${selectionKey}/products?limit=${PAGE}&offset=${offset}`
+      );
+      data.results.forEach((a) => ids.add(a.product.id));
+      offset += PAGE;
+      if (offset >= data.total || data.results.length === 0) break;
+    }
+  } catch {
+    /* selection may not exist yet */
   }
+  return ids;
 }
 
 interface SelectionMeta { version: number }

@@ -32,6 +32,9 @@ export interface StoreProgrammeFields {
   coveo_source_id?: string;
   braze_segment_id?: string;
   rapid_delivery_enabled?: boolean;
+  rapid_delivery_radius_km?: number;
+  click_collect_enabled?: boolean;
+  timeslot_capacity?: number;
   lifecycle_state?: LifecycleState;
   activation_date?: string;
   product_feed_ref?: string;

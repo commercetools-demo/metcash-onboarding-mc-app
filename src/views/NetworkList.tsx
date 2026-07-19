@@ -56,6 +56,7 @@ export default function NetworkList() {
   const [banner, setBanner] = useState(ALL);
   const [tier, setTier] = useState(ALL);
   const [lifecycle, setLifecycle] = useState(ALL);
+  const [showUnassigned, setShowUnassigned] = useState(false);
 
   const openOwner = (key: string) => history.push(`${base}/network/owner/${key}`);
   const openStore = (key: string) => history.push(`${base}/network/store/${key}`);
@@ -271,11 +272,71 @@ export default function NetworkList() {
           </div>
         )}
 
-        {unassigned.length > 0 && view === 'owner' && q === '' && (
-          <Text.Detail tone="secondary">
-            {unassigned.length} store{unassigned.length === 1 ? '' : 's'} not yet linked to an owner.
-          </Text.Detail>
-        )}
+        {/* unassigned stores (dataset stores with no owner) — collapsible */}
+        {view === 'owner' && (() => {
+          const filteredUnassigned = unassigned.filter((s) => matchesStore(s, filters, ''));
+          if (filteredUnassigned.length === 0) return null;
+          const CAP = 18;
+          return (
+            <div style={{ border: '1px solid #e3e7ee', borderRadius: 12, background: '#fff' }}>
+              <button
+                onClick={() => setShowUnassigned((v) => !v)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '14px 16px', background: 'none', border: 'none', cursor: 'pointer',
+                }}
+              >
+                <Text.Subheadline as="h4">
+                  Unassigned stores ({filteredUnassigned.length})
+                </Text.Subheadline>
+                <Text.Detail tone="secondary">
+                  {showUnassigned ? 'Hide ▲' : 'Show ▼'}
+                </Text.Detail>
+              </button>
+              {showUnassigned && (
+                <div style={{ padding: '0 16px 16px' }}>
+                  <Text.Detail tone="secondary">
+                    Dataset stores not linked to a franchisee owner. Use the “All stores” view for full sorting/filtering.
+                  </Text.Detail>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8, marginTop: 10 }}>
+                    {filteredUnassigned.slice(0, CAP).map((s) => {
+                      const f = s.custom?.fields ?? {};
+                      const meta = bannerMeta(f.banner);
+                      return (
+                        <div
+                          key={s.key}
+                          onClick={() => openStore(s.key)}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                            padding: '8px 10px', border: '1px solid #eef1f5',
+                            borderLeft: `4px solid ${meta?.color ?? '#9aa4b2'}`, borderRadius: 8, cursor: 'pointer',
+                          }}
+                        >
+                          <span style={{ minWidth: 0 }}>
+                            <Text.Detail isBold>{s.name?.['en-AU'] ?? s.key}</Text.Detail>
+                            <Text.Detail tone="secondary">
+                              {meta?.label ?? f.banner}{f.suburb ? ` · ${f.suburb}` : ''}
+                            </Text.Detail>
+                          </span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: f.lifecycle_state === 'ACTIVE' ? '#0b8043' : '#67728a' }}>
+                            {f.lifecycle_state ?? 'DRAFT'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {filteredUnassigned.length > CAP && (
+                    <div style={{ marginTop: 10 }}>
+                      <Text.Detail tone="secondary">
+                        + {filteredUnassigned.length - CAP} more — switch to “All stores”.
+                      </Text.Detail>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Spacings.Stack>
     </div>
   );

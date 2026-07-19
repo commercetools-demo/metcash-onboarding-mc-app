@@ -1,26 +1,28 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Text from '@commercetools-uikit/text';
 import SelectInput from '@commercetools-uikit/select-input';
+import SecondaryButton from '@commercetools-uikit/secondary-button';
 import FlatButton from '@commercetools-uikit/flat-button';
+import LoadingSpinner from '@commercetools-uikit/loading-spinner';
+import { useCtClient } from '../lib/ctClient';
+import {
+  searchProductsPage,
+  fetchAllProductIds,
+  fetchProductsByIds,
+  countProducts,
+} from '../lib/catalog';
 import type { CatalogProduct, CategoryLite } from '../lib/types';
 
-type Side = 'available' | 'range';
 const ALL = '__all__';
+const PAGE = 24;
 
 function LocalBadge() {
   return (
     <span
-      title="Local / exclusive to this store"
+      title="Local / exclusive"
       style={{
-        fontSize: 10,
-        fontWeight: 800,
-        letterSpacing: '0.04em',
-        color: '#7a4d00',
-        background: '#fdefc9',
-        border: '1px solid #f4d78a',
-        borderRadius: 4,
-        padding: '1px 5px',
-        flexShrink: 0,
+        fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', color: '#7a4d00',
+        background: '#fdefc9', border: '1px solid #f4d78a', borderRadius: 4, padding: '1px 5px', flexShrink: 0,
       }}
     >
       LOCAL
@@ -30,48 +32,30 @@ function LocalBadge() {
 
 function ProductCard({
   product,
-  side,
+  inRange,
   isLocal,
-  onMove,
+  onToggle,
 }: {
   product: CatalogProduct;
-  side: Side;
+  inRange: boolean;
   isLocal: boolean;
-  onMove: (id: string, to: Side) => void;
+  onToggle: (id: string) => void;
 }) {
-  const to: Side = side === 'available' ? 'range' : 'available';
   return (
     <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('text/plain', product.id);
-        e.dataTransfer.effectAllowed = 'move';
-      }}
-      onClick={() => onMove(product.id, to)}
-      title={side === 'available' ? 'Click or drag to add to range' : 'Click or drag to remove from range'}
+      onClick={() => onToggle(product.id)}
+      title={inRange ? 'Click to remove from range' : 'Click to add to range'}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '8px 10px',
-        borderRadius: 8,
-        border: '1px solid #e3e7ee',
-        background: '#fff',
-        cursor: 'grab',
-        userSelect: 'none',
+        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8,
+        border: '1px solid', borderColor: inRange ? '#b3e0c4' : '#e3e7ee',
+        background: inRange ? '#f5fbf7' : '#fff', cursor: 'pointer', userSelect: 'none',
       }}
     >
       <div
         style={{
-          width: 36,
-          height: 36,
-          borderRadius: 6,
-          background: '#f2f4f8',
-          flexShrink: 0,
+          width: 36, height: 36, borderRadius: 6, background: '#f2f4f8', flexShrink: 0,
           backgroundImage: product.image ? `url(${product.image})` : undefined,
-          backgroundSize: 'contain',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center',
+          backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
         }}
       />
       <div style={{ minWidth: 0, flex: 1 }}>
@@ -81,233 +65,241 @@ function ProductCard({
         </div>
         <Text.Detail tone="secondary">{product.sku}</Text.Detail>
       </div>
-      <span style={{ color: '#7a8699', fontWeight: 700, fontSize: 16 }}>
-        {side === 'available' ? '+' : '×'}
+      <span style={{ fontSize: 12, fontWeight: 800, color: inRange ? '#0b8043' : '#7a8699' }}>
+        {inRange ? '✓ In range' : '+ Add'}
       </span>
     </div>
   );
 }
 
-function Column({
-  title,
-  side,
-  products,
-  isLocal,
-  onMove,
-  onDropSide,
-  headerRight,
-}: {
-  title: string;
-  side: Side;
-  products: CatalogProduct[];
-  isLocal: (p: CatalogProduct) => boolean;
-  onMove: (id: string, to: Side) => void;
-  onDropSide: (id: string) => void;
-  headerRight?: React.ReactNode;
-}) {
-  const [over, setOver] = useState(false);
-  return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        const id = e.dataTransfer.getData('text/plain');
-        if (id) onDropSide(id);
-      }}
-      style={{
-        flex: 1,
-        minWidth: 0,
-        border: '1px solid',
-        borderColor: over ? '#7ea6ff' : '#e3e7ee',
-        background: over ? '#f2f6ff' : '#fafbfc',
-        borderRadius: 10,
-        display: 'flex',
-        flexDirection: 'column',
-        maxHeight: 460,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '10px 12px',
-          borderBottom: '1px solid #eef1f5',
-        }}
-      >
-        <Text.Detail isBold>
-          {title} ({products.length})
-        </Text.Detail>
-        {headerRight}
-      </div>
-      <div style={{ overflowY: 'auto', padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {products.length === 0 ? (
-          <div style={{ padding: 16, textAlign: 'center' }}>
-            <Text.Detail tone="secondary">Drop products here</Text.Detail>
-          </div>
-        ) : (
-          products.map((p) => (
-            <ProductCard key={p.id} product={p} side={side} isLocal={isLocal(p)} onMove={onMove} />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function CatalogEditor({
-  products,
+  productTypeId,
   categories,
+  localCategoryId,
   inRange,
   onChange,
-  localCategoryId,
+  totalHint,
 }: {
-  products: CatalogProduct[];
+  productTypeId: string | null;
   categories: CategoryLite[];
+  localCategoryId?: string;
   inRange: Set<string>;
   onChange: (next: Set<string>) => void;
-  localCategoryId?: string;
+  totalHint?: number;
 }) {
+  const client = useCtClient();
   const [q, setQ] = useState('');
+  const [debouncedQ, setDebouncedQ] = useState('');
   const [category, setCategory] = useState(ALL);
-  const [localOnly, setLocalOnly] = useState(false);
+  const [page, setPage] = useState(0);
+  const [view, setView] = useState<'catalogue' | 'inrange'>('catalogue');
+
+  const [results, setResults] = useState<CatalogProduct[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [pillarTotal, setPillarTotal] = useState<number | undefined>(totalHint);
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null);
 
   const isLocal = (p: CatalogProduct) => !!localCategoryId && p.categoryIds.includes(localCategoryId);
-  const localCount = products.filter(isLocal).length;
-
-  // categories that actually appear on these products
-  const usedCategories = useMemo(() => {
-    const ids = new Set<string>();
-    products.forEach((p) => p.categoryIds.forEach((c) => ids.add(c)));
-    return categories.filter((c) => ids.has(c.id));
-  }, [products, categories]);
-
-  const move = (id: string, to: Side) => {
+  const toggle = (id: string) => {
     const next = new Set(inRange);
-    if (to === 'range') next.add(id);
-    else next.delete(id);
+    next.has(id) ? next.delete(id) : next.add(id);
     onChange(next);
   };
 
-  const matches = (p: CatalogProduct) => {
-    if (localOnly && !isLocal(p)) return false;
-    if (category !== ALL && !p.categoryIds.includes(category)) return false;
-    if (q) {
-      const hay = `${p.name} ${p.sku ?? ''} ${p.key ?? ''}`.toLowerCase();
-      if (!hay.includes(q.toLowerCase())) return false;
-    }
-    return true;
+  // debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // reset to first page when filters change
+  useEffect(() => setPage(0), [debouncedQ, category, view]);
+
+  // pillar total (for "full range" label)
+  useEffect(() => {
+    if (!productTypeId) return;
+    if (totalHint != null) { setPillarTotal(totalHint); return; }
+    let cancelled = false;
+    countProducts(client, { productTypeId }).then((t) => !cancelled && setPillarTotal(t)).catch(() => {});
+    return () => { cancelled = true; };
+  }, [client, productTypeId, totalHint]);
+
+  // load current page
+  useEffect(() => {
+    if (!productTypeId) { setResults([]); setTotal(0); return; }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        if (view === 'inrange') {
+          const ids = [...inRange];
+          setTotal(ids.length);
+          const slice = ids.slice(page * PAGE, page * PAGE + PAGE);
+          const details = await fetchProductsByIds(client, slice);
+          if (!cancelled) setResults(details);
+        } else {
+          const { results: r, total: t } = await searchProductsPage(client, {
+            productTypeId,
+            categoryId: category === ALL ? undefined : category,
+            text: debouncedQ,
+            limit: PAGE,
+            offset: page * PAGE,
+          });
+          if (!cancelled) { setResults(r); setTotal(t); }
+        }
+      } catch {
+        if (!cancelled) { setResults([]); setTotal(0); }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, productTypeId, category, debouncedQ, page, view]);
+
+  const pillarCategories = useMemo(() => categories, [categories]);
+
+  const isFull = pillarTotal != null && pillarTotal > 0 && inRange.size >= pillarTotal;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE));
+
+  const carryFull = async () => {
+    if (!productTypeId) return;
+    setBulkBusy('full');
+    try {
+      const ids = await fetchAllProductIds(client, { productTypeId });
+      onChange(new Set(ids));
+    } finally { setBulkBusy(null); }
+  };
+  const addCategory = async () => {
+    if (!productTypeId || category === ALL) return;
+    setBulkBusy('category');
+    try {
+      const ids = await fetchAllProductIds(client, { productTypeId, categoryId: category });
+      const next = new Set(inRange);
+      ids.forEach((id) => next.add(id));
+      onChange(next);
+    } finally { setBulkBusy(null); }
   };
 
-  const availableAll = products.filter((p) => !inRange.has(p.id));
-  const rangeAll = products.filter((p) => inRange.has(p.id));
-  const available = availableAll.filter(matches);
-  const range = rangeAll.filter(matches);
-
-  const addAllFiltered = () => {
-    const next = new Set(inRange);
-    available.forEach((p) => next.add(p.id));
-    onChange(next);
-  };
-  const removeAllFiltered = () => {
-    const next = new Set(inRange);
-    range.forEach((p) => next.delete(p.id));
-    onChange(next);
-  };
-
-  if (products.length === 0) {
+  if (!productTypeId) {
     return (
       <Text.Body tone="secondary">
-        No products available for this pillar yet (the catalogue is populated by the pillar feed).
-        The store can still be provisioned with an empty range.
+        No catalogue is available for this pillar yet (products arrive via the pillar feed). The
+        store can still be provisioned with an empty range.
       </Text.Body>
     );
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* filters */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 220px', minWidth: 180 }}>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name or SKU…"
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: '1px solid #c9d0da',
-              fontSize: 14,
-              outline: 'none',
-            }}
-          />
+      {/* summary + range mode / bulk */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 22, fontWeight: 800 }}>{inRange.size}</span>
+          <Text.Detail tone="secondary">
+            in range{pillarTotal != null ? ` of ${pillarTotal}` : ''}
+          </Text.Detail>
+          {isFull && (
+            <span
+              style={{
+                fontSize: 11, fontWeight: 800, color: '#0b8043', background: '#e7f6ee',
+                border: '1px solid #b3e0c4', borderRadius: 999, padding: '1px 8px',
+              }}
+            >
+              FULL RANGE
+            </span>
+          )}
         </div>
-        <div style={{ width: 220 }}>
-          <SelectInput
-            value={category}
-            onChange={(e) => setCategory(e.target.value as string)}
-            options={[
-              { value: ALL, label: 'All categories' },
-              ...usedCategories.map((c) => ({ value: c.id, label: c.name })),
-            ]}
-          />
-        </div>
-        {localCount > 0 && (
-          <button
-            onClick={() => setLocalOnly((v) => !v)}
-            style={{
-              border: '1px solid',
-              borderColor: localOnly ? '#f4d78a' : '#c9d0da',
-              background: localOnly ? '#fdefc9' : '#fff',
-              color: localOnly ? '#7a4d00' : '#475467',
-              borderRadius: 8,
-              padding: '7px 12px',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            ★ Local only ({localCount})
-          </button>
-        )}
-        <Text.Detail tone="secondary">
-          {rangeAll.length} of {products.length} in range
-        </Text.Detail>
+        <div style={{ flex: 1 }} />
+        <SecondaryButton
+          label={bulkBusy === 'full' ? 'Adding…' : `Carry full national range${pillarTotal ? ` (${pillarTotal})` : ''}`}
+          onClick={carryFull}
+          isDisabled={!!bulkBusy || isFull}
+        />
+        <FlatButton
+          label="Clear range"
+          onClick={() => onChange(new Set())}
+          isDisabled={!!bulkBusy || inRange.size === 0}
+          tone="secondary"
+        />
       </div>
 
-      {/* dual pane */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
-        <Column
-          title="Available"
-          side="available"
-          products={available}
-          isLocal={isLocal}
-          onMove={move}
-          onDropSide={(id) => move(id, 'available')}
-          headerRight={
-            available.length > 0 ? <FlatButton label="Add all →" onClick={addAllFiltered} /> : undefined
-          }
-        />
-        <Column
-          title="In range"
-          side="range"
-          products={range}
-          isLocal={isLocal}
-          onMove={move}
-          onDropSide={(id) => move(id, 'range')}
-          headerRight={
-            range.length > 0 ? <FlatButton label="← Remove all" onClick={removeAllFiltered} /> : undefined
-          }
-        />
+      {/* view toggle */}
+      <div style={{ display: 'inline-flex', border: '1px solid #c9d0da', borderRadius: 8, overflow: 'hidden', width: 'fit-content' }}>
+        {(['catalogue', 'inrange'] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setView(m)}
+            style={{
+              border: 'none', padding: '7px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              background: view === m ? '#1a1a1a' : '#fff', color: view === m ? '#fff' : '#475467',
+            }}
+          >
+            {m === 'catalogue' ? 'Browse catalogue' : `In range (${inRange.size})`}
+          </button>
+        ))}
       </div>
+
+      {/* filters (catalogue view only) */}
+      {view === 'catalogue' && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 220px', minWidth: 180 }}>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search name or SKU…"
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #c9d0da', fontSize: 14, outline: 'none' }}
+            />
+          </div>
+          <div style={{ width: 240 }}>
+            <SelectInput
+              value={category}
+              onChange={(e) => setCategory(e.target.value as string)}
+              options={[{ value: ALL, label: 'All categories' }, ...pillarCategories.map((c) => ({ value: c.id, label: c.name }))]}
+            />
+          </div>
+          {category !== ALL && (
+            <SecondaryButton
+              label={bulkBusy === 'category' ? 'Adding…' : `Add all in category (${total})`}
+              onClick={addCategory}
+              isDisabled={!!bulkBusy}
+            />
+          )}
+        </div>
+      )}
+
+      {/* results */}
+      <div style={{ minHeight: 200 }}>
+        {loading ? (
+          <div style={{ padding: 24 }}><LoadingSpinner scale="s">Loading products…</LoadingSpinner></div>
+        ) : results.length === 0 ? (
+          <div style={{ padding: 24, textAlign: 'center' }}>
+            <Text.Detail tone="secondary">
+              {view === 'inrange' ? 'No products in range yet.' : 'No products match.'}
+            </Text.Detail>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
+            {results.map((p) => (
+              <ProductCard key={p.id} product={p} inRange={inRange.has(p.id)} isLocal={isLocal(p)} onToggle={toggle} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* pagination */}
+      {total > PAGE && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          <FlatButton label="‹ Prev" onClick={() => setPage((p) => Math.max(0, p - 1))} isDisabled={page === 0} />
+          <Text.Detail tone="secondary">Page {page + 1} of {pageCount} · {total} products</Text.Detail>
+          <FlatButton label="Next ›" onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} isDisabled={page >= pageCount - 1} />
+        </div>
+      )}
+
       <Text.Detail tone="secondary">
-        Drag cards between columns, or click a card to move it. Use search / category to bulk add or remove.
+        Click a product to add or remove it. Use search / category to find items fast, or “Carry full
+        national range” to include everything.
       </Text.Detail>
     </div>
   );

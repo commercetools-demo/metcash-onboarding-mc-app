@@ -6,19 +6,24 @@ import LoadingSpinner from '@commercetools-uikit/loading-spinner';
 import { useCtClient } from '../lib/ctClient';
 import { selectionKey } from '../lib/ctWrites';
 import {
-  fetchProductsByPillar,
+  fetchProductTypeIdForPillar,
   fetchCategories,
   fetchSelectionProductIds,
   setSelectionProducts,
 } from '../lib/catalog';
 import { bannerMeta } from '../lib/banners';
 import CatalogEditor from './CatalogEditor';
-import type { CatalogProduct, CategoryLite, Pillar } from '../lib/types';
+import type { CategoryLite, Pillar } from '../lib/types';
+
+/** Categories relevant to a pillar (pillar-prefixed keys) plus the shared `local` category. */
+function categoriesForPillar(cats: CategoryLite[], pillar?: Pillar): CategoryLite[] {
+  if (!pillar) return cats;
+  return cats.filter((c) => c.key && (c.key.startsWith(pillar) || c.key === 'local'));
+}
 
 /**
- * Self-contained range editor for an EXISTING store: loads the pillar catalogue + the store's
- * current selection, lets HQ drag/drop to add/remove, and saves the diff (idempotent).
- * Reused both embedded in the store detail and on the standalone manage-range page.
+ * Self-contained range editor for an EXISTING store: resolves the pillar catalogue, loads the
+ * store's current selection, lets HQ search/curate (or carry the full range), and saves the diff.
  */
 export default function StoreRangeEditor({
   storeKey,
@@ -31,7 +36,7 @@ export default function StoreRangeEditor({
 }) {
   const client = useCtClient();
 
-  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [productTypeId, setProductTypeId] = useState<string | null>(null);
   const [categories, setCategories] = useState<CategoryLite[]>([]);
   const [inRange, setInRange] = useState<Set<string>>(new Set());
   const [baseline, setBaseline] = useState<Set<string>>(new Set());
@@ -40,20 +45,21 @@ export default function StoreRangeEditor({
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
+  const pillar = bannerMeta(banner)?.pillar as Pillar | undefined;
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
       try {
-        const pillar = bannerMeta(banner)?.pillar as Pillar | undefined;
-        const [prods, cats, current] = await Promise.all([
-          pillar ? fetchProductsByPillar(client, pillar) : Promise.resolve([]),
+        const [ptId, cats, current] = await Promise.all([
+          pillar ? fetchProductTypeIdForPillar(client, pillar) : Promise.resolve(null),
           fetchCategories(client),
           fetchSelectionProductIds(client, selectionKey(storeKey)),
         ]);
         if (cancelled) return;
-        setProducts(prods);
+        setProductTypeId(ptId);
         setCategories(cats);
         setInRange(new Set(current));
         setBaseline(new Set(current));
@@ -63,10 +69,8 @@ export default function StoreRangeEditor({
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [client, storeKey, banner]);
+    return () => { cancelled = true; };
+  }, [client, storeKey, pillar]);
 
   const dirty = inRange.size !== baseline.size || [...inRange].some((id) => !baseline.has(id));
 
@@ -85,31 +89,22 @@ export default function StoreRangeEditor({
     }
   };
 
-  if (loading) {
-    return <LoadingSpinner scale="s">Loading catalogue…</LoadingSpinner>;
-  }
-  if (error) {
-    return <Text.Body tone="critical">{error}</Text.Body>;
-  }
+  if (loading) return <LoadingSpinner scale="s">Loading catalogue…</LoadingSpinner>;
+  if (error) return <Text.Body tone="critical">{error}</Text.Body>;
 
   return (
     <Spacings.Stack scale="s">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-        <Text.Detail tone="secondary">
-          <code>{selectionKey(storeKey)}</code>
-        </Text.Detail>
-        <Spacings.Inline alignItems="center" scale="s">
-          {flash && <Text.Detail tone="secondary">{flash}</Text.Detail>}
-          <PrimaryButton
-            label={dirty ? `Save range (${inRange.size})` : 'Saved'}
-            onClick={handleSave}
-            isDisabled={!dirty || saving}
-          />
-        </Spacings.Inline>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
+        {flash && <Text.Detail tone="secondary">{flash}</Text.Detail>}
+        <PrimaryButton
+          label={dirty ? `Save range (${inRange.size})` : 'Saved'}
+          onClick={handleSave}
+          isDisabled={!dirty || saving}
+        />
       </div>
       <CatalogEditor
-        products={products}
-        categories={categories}
+        productTypeId={productTypeId}
+        categories={categoriesForPillar(categories, pillar)}
         inRange={inRange}
         onChange={setInRange}
         localCategoryId={categories.find((c) => c.key === 'local')?.id}

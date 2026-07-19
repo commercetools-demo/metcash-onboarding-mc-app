@@ -12,7 +12,7 @@ export interface BannerMeta {
 
 export const BANNERS: Record<BannerKey, BannerMeta> = {
   IGA: { key: 'IGA', label: 'IGA', pillar: 'food', color: '#E4002B', onColor: '#ffffff' },
-  CELLARBRATIONS: { key: 'CELLARBRATIONS', label: 'Cellarbrations', pillar: 'liquor', color: '#00539F', onColor: '#ffffff' },
+  CELLARBRATIONS: { key: 'CELLARBRATIONS', label: 'Cellarbrations', pillar: 'liquor', color: '#F5A800', onColor: '#1A1A1A' },
   BOTTLE_O: { key: 'BOTTLE_O', label: 'The Bottle-O', pillar: 'liquor', color: '#D71920', onColor: '#ffffff' },
   TOTAL_TOOLS: { key: 'TOTAL_TOOLS', label: 'Total Tools', pillar: 'hardware', color: '#1A1A1A', onColor: '#FFD200' },
   MITRE10: { key: 'MITRE10', label: 'Mitre 10', pillar: 'hardware', color: '#004B87', onColor: '#ffffff' },

@@ -1,5 +1,6 @@
 import { bannerMeta } from '../lib/banners';
 import type { BannerKey } from '../lib/types';
+import cellarbrationsLogo from '../assets/banners/cellarbrations.png';
 
 /**
  * Banner logo mark.
@@ -11,6 +12,7 @@ import type { BannerKey } from '../lib/types';
  * looks polished today and upgrades to official artwork with zero code changes.
  */
 const LOGO_SRC: Partial<Record<BannerKey, string>> = {
+  CELLARBRATIONS: cellarbrationsLogo,
   // BOTTLE_O: bottleOLogoUrl,
   // TOTAL_TOOLS: totalToolsLogoUrl,
   // MITRE10: mitre10LogoUrl,
