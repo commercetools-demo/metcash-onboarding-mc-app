@@ -100,14 +100,22 @@ const OWNERS = [
     displayName: 'Nguyen Retail Group',
     abn: '12 345 678 901',
     primaryContact: { name: 'An Nguyen', email: 'an@nrg.com.au', phone: '+61 400 111 222' },
-    stores: ['bottle-o-bondi', 'total-tools-richmond', 'mitre10-brunswick'],
+    // cross-banner franchisee — Bottle-O + Cellarbrations + Total Tools + Mitre 10 (all four banners)
+    stores: [
+      'bottle-o-bondi',
+      'total-tools-richmond',
+      'mitre10-brunswick',
+      'cb-store-3000',
+      'cb-store-3125',
+    ],
   },
   {
     key: 'coastal-cellars',
     displayName: 'Coastal Cellars Pty Ltd',
     abn: '45 678 901 234',
     primaryContact: { name: 'Maria Costa', email: 'maria@coastalcellars.com.au', phone: '+61 400 333 444' },
-    stores: ['bottle-o-neutral-bay', 'bottle-o-manly'],
+    // legacy Bottle-O + NSW Cellarbrations stores (a liquor operator growing its footprint)
+    stores: ['bottle-o-neutral-bay', 'bottle-o-manly', 'cb-store-2000', 'cb-store-2156'],
   },
   {
     key: 'melbourne-trade-hardware',
