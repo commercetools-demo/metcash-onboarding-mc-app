@@ -1,5 +1,4 @@
-> **SNAPSHOT** — copied from `metcash-demo/docs/` for convenience. The **canonical source of truth is
-> the `metcash-demo` repo**; if they diverge, that repo wins. This is the shared contract, not app-local spec.
+> **SNAPSHOT** — copied from `metcash-demo/docs/`. Canonical source is the `metcash-demo` repo. Re-synced with RFP v2 changes; see `docs/19-onboarding-app-sync.md`.
 
 # 02 — commercetools Data Model
 
