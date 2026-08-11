@@ -24,7 +24,12 @@ export default function AppRoutes() {
       <Route path={`${path}/templates`} component={TemplateManagement} />
       <Route path={`${path}/loyalty`} component={LoyaltyManagement} />
 
-      <Redirect exact from={path} to={`${path}/network`} />
+      {/*
+        Catch-all LAST: without it an unmatched path renders nothing at all, so a typo'd
+        submenu uriPath (or a stale bundle missing a route) shows a blank screen with no
+        clue as to why. Redirecting to the network list always leaves the app usable.
+      */}
+      <Redirect to={`${path}/network`} />
     </Switch>
   );
 }

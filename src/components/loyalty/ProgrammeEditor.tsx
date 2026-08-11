@@ -82,9 +82,22 @@ function WorkedExample({
     <Card theme="dark" insetScale="s">
       <Spacings.Stack scale="xs">
         <Text.Detail isBold>Worked example</Text.Detail>
+        {/*
+          Do NOT use the <>…</> fragment shorthand anywhere in this app: mc-scripts' Babel
+          config sets the JSX pragma but leaves pragmaFrag as a literal `React.Fragment`,
+          which is never imported — it type-checks and builds, then throws
+          "React is not defined" at runtime. Use an element (or <React.Fragment>) instead.
+        */}
         <Text.Body>
           A {money(basket)} basket earns <b>{points.toLocaleString('en-AU')} points</b> (worth{' '}
-          <b>{money(worth)}</b>){cashbackPct > 0 && <> plus <b>{money(cashback)}</b> cashback</>}.
+          <b>{money(worth)}</b>)
+          {cashbackPct > 0 && (
+            <span>
+              {' '}
+              plus <b>{money(cashback)}</b> cashback
+            </span>
+          )}
+          .
         </Text.Body>
         <Text.Detail tone="secondary">
           Effective member value {((worth + cashback) / basket * 100).toFixed(1)}% · redemption unlocks at{' '}
