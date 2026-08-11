@@ -5,6 +5,7 @@ import StoreDetail from './views/StoreDetail';
 import StoreCatalog from './views/StoreCatalog';
 import OwnerView from './views/OwnerView';
 import TemplateManagement from './views/TemplateManagement';
+import LoyaltyManagement from './views/LoyaltyManagement';
 
 // The MC App Kit mounts this app at /:projectKey/retailer-onboarding
 export default function AppRoutes() {
@@ -21,6 +22,7 @@ export default function AppRoutes() {
       <Route path={`${path}/onboard`} component={OnboardWizard} />
 
       <Route path={`${path}/templates`} component={TemplateManagement} />
+      <Route path={`${path}/loyalty`} component={LoyaltyManagement} />
 
       <Redirect exact from={path} to={`${path}/network`} />
     </Switch>

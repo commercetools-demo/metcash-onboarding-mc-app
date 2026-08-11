@@ -96,6 +96,35 @@ export interface ProgrammeTierObject {
   value: ProgrammeTierValue;
 }
 
+// ---- loyalty-program custom object (see metcash-demo/docs/27) ----
+// Consumed by the storefront at site/lib/ct/loyalty.ts and site/lib/ct/mechanics.ts.
+// Field keys are snake_case because they mirror the Metcash shared dataset verbatim.
+export interface LoyaltyTier {
+  tier: string;
+  threshold: number; // lifetime points to reach this tier
+  benefits: string[];
+}
+export interface LoyaltyCashbackModel {
+  accrual: string; // e.g. 'percent_of_spend'
+  default_pct: number;
+}
+export interface LoyaltyProgramValue {
+  program_name: string;
+  tiers: LoyaltyTier[];
+  points_earn_rate: number; // points per AUD spent
+  points_redemption_value: number; // AUD per point
+  min_redemption: number; // min points before redemption is allowed
+  redeem_as_tender: boolean;
+  cashback_model: LoyaltyCashbackModel;
+}
+export interface LoyaltyProgramObject {
+  id: string;
+  version: number;
+  container: 'loyalty-program';
+  key: string; // banner slug, e.g. 'cellarbrations'
+  value: LoyaltyProgramValue;
+}
+
 // ---- retailer-owners custom object ----
 export interface OwnerContact {
   name: string;

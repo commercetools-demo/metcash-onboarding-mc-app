@@ -7,6 +7,7 @@ import type {
   ProgrammeTierObject,
   RetailerOwnerObject,
   ChannelData,
+  LoyaltyProgramObject,
 } from './types';
 
 /**
@@ -70,6 +71,19 @@ export async function fetchTiers(client: CtClient): Promise<ProgrammeTierObject[
 export async function fetchOwners(client: CtClient): Promise<RetailerOwnerObject[]> {
   const data = await client.get<CtPagedQueryResponse<RetailerOwnerObject>>(
     '/custom-objects/retailer-owners?limit=500'
+  );
+  return data.results;
+}
+
+/**
+ * Loyalty programme config, one object per banner (today only `cellarbrations`).
+ * Returned as a list so the editor can offer a banner picker as soon as a second one exists.
+ */
+export async function fetchLoyaltyPrograms(
+  client: CtClient
+): Promise<LoyaltyProgramObject[]> {
+  const data = await client.get<CtPagedQueryResponse<LoyaltyProgramObject>>(
+    '/custom-objects/loyalty-program?limit=50'
   );
   return data.results;
 }

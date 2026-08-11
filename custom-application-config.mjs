@@ -59,6 +59,12 @@ const config = {
       labelAllLocales: [],
       permissions: [],
     },
+    {
+      uriPath: 'loyalty',
+      defaultLabel: 'Loyalty & promotions',
+      labelAllLocales: [],
+      permissions: [],
+    },
   ],
 };
 

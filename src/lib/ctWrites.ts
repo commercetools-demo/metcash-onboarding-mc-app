@@ -9,6 +9,8 @@ import type {
   ProgrammeTierKey,
   LifecycleState,
   StoreProgrammeFields,
+  LoyaltyProgramObject,
+  LoyaltyProgramValue,
 } from './types';
 
 /**
@@ -229,6 +231,25 @@ export async function updateTierTemplate(
 ): Promise<ProgrammeTierObject> {
   return client.post<ProgrammeTierObject>('/custom-objects', {
     container: 'programme-tiers',
+    key,
+    value,
+  });
+}
+
+// ---- loyalty programme config (docs/27) --------------------------------------
+
+/**
+ * Upsert the loyalty programme for a banner. Full-document overwrite, last-write-wins —
+ * same shape as updateTierTemplate. The storefront reads this on every request (React
+ * `cache()`, no ISR), so a save here is visible on the next page load.
+ */
+export async function upsertLoyaltyProgram(
+  client: CtClient,
+  key: string,
+  value: LoyaltyProgramValue
+): Promise<LoyaltyProgramObject> {
+  return client.post<LoyaltyProgramObject>('/custom-objects', {
+    container: 'loyalty-program',
     key,
     value,
   });
